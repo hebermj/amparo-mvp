@@ -1,7 +1,8 @@
 /**
- * LLM Gateway — processa a mensagem do usuário chamando DeepSeek / Claude / OpenAI / OpenCode Zen.
+ * LLM Gateway — processa a mensagem do usuário chamando DeepSeek / Claude / OpenAI / OpenCode Zen / OpenRouter.
  *
  * Prioridade da lista abaixo (fallback automático se um falhar).
+ * Ordem: DeepSeek → Claude → OpenAI → OpenCode Zen → OpenRouter (fallback gratuito).
  */
 
 const PROVIDERS = [];
@@ -44,6 +45,16 @@ if (process.env.OPENCODE_ZEN_API_KEY) {
     apiKey: process.env.OPENCODE_ZEN_API_KEY,
     url: process.env.OPENCODE_ZEN_BASE_URL || 'https://opencode.ai/zen/v1/chat/completions',
     model: process.env.OPENCODE_ZEN_MODEL || 'deepseek-v4-flash-free',
+  });
+}
+
+// ── OpenRouter (compatível com OpenAI, fallback gratuito) ──────
+if (process.env.OPENROUTER_API_KEY) {
+  PROVIDERS.push({
+    name: 'openrouter',
+    apiKey: process.env.OPENROUTER_API_KEY,
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    model: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
   });
 }
 
