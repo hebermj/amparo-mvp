@@ -1,7 +1,7 @@
 /**
- * LLM Gateway — processa a mensagem do usuário chamando DeepSeek / Claude / OpenAI.
+ * LLM Gateway — processa a mensagem do usuário chamando DeepSeek / Claude / OpenAI / OpenCode Zen.
  *
- * Prioridade: DeepSeek → Claude → OpenAI (fallback automático).
+ * Prioridade da lista abaixo (fallback automático se um falhar).
  */
 
 const PROVIDERS = [];
@@ -32,8 +32,18 @@ if (process.env.OPENAI_API_KEY) {
   PROVIDERS.push({
     name: 'openai',
     apiKey: process.env.OPENAI_API_KEY,
-    url: 'https://api.openai.com/v1/chat/completions',
+    url: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1/chat/completions',
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  });
+}
+
+// ── OpenCode Zen API (compatível com OpenAI) ─────────────────────
+if (process.env.OPENCODE_ZEN_API_KEY) {
+  PROVIDERS.push({
+    name: 'opencode-zen',
+    apiKey: process.env.OPENCODE_ZEN_API_KEY,
+    url: process.env.OPENCODE_ZEN_BASE_URL || 'https://opencode.ai/zen/v1/chat/completions',
+    model: process.env.OPENCODE_ZEN_MODEL || 'deepseek-v4-flash-free',
   });
 }
 
