@@ -116,11 +116,38 @@ async function callProvider(provider, messages) {
 
     if (!res.ok) {
       const errText = await res.text();
+      // Se for rate limit (429), joga erro específico para retentar
+      if (res.status === 429) {
+        throw new Error(`RATE_LIMIT: ${provider.name} - ${errText}`);
+      }
       throw new Error(`${provider.name} API ${res.status}: ${errText}`);
     }
 
     const data = await res.json();
-    return data.choices?.[0]?.message?.content || '❌ Sem resposta da IA.';
+    const content = data.choices?.[0]?.message?.content;
+
+    // Se o conteúdo veio vazio, tenta novamente
+    if (!content || content.trim() === '') {
+      console.warn(`[${provider.name}] Resposta vazia, re-tentando...`);
+      // Só retenta uma vez
+      const retryRes = await fetch(provider.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${provider.apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (retryRes.ok) {
+        const retryData = await retryRes.json();
+        const retryContent = retryData.choices?.[0]?.message?.content;
+        if (retryContent && retryContent.trim() !== '') {
+          return retryContent;
+        }
+      }
+    }
+
+    return content || '❌ Sem resposta da IA.';
   }
 }
 
@@ -158,25 +185,39 @@ async function processWithLLM(userMessage, session, chatId) {
 
   // Tenta cada provedor em ordem, com fallback
   let lastError = null;
+  let attempts = 0;
+  const maxAttempts = 2;
 
-  for (const provider of PROVIDERS) {
-    try {
-      const reply = await callProvider(provider, messages);
+  while (attempts < maxAttempts) {
+    attempts++;
+    for (const provider of PROVIDERS) {
+      try {
+        const reply = await callProvider(provider, messages);
 
-      // Atualiza histórico da sessão
-      session.history.push({ role: 'user', content: userMessage });
-      session.history.push({ role: 'assistant', content: reply });
+        // Atualiza histórico da sessão
+        session.history.push({ role: 'user', content: userMessage });
+        session.history.push({ role: 'assistant', content: reply });
 
-      // Mantém só os últimos 6
-      if (session.history.length > 6) {
-        session.history = session.history.slice(-6);
+        // Mantém só os últimos 6
+        if (session.history.length > 6) {
+          session.history = session.history.slice(-6);
+        }
+
+        return reply;
+      } catch (err) {
+        console.error(`[${provider.name} ERROR]`, err.message);
+        lastError = err;
+        // Tenta próximo provedor
       }
+    }
 
-      return reply;
-    } catch (err) {
-      console.error(`[${provider.name} ERROR]`, err.message);
-      lastError = err;
-      // Tenta próximo provedor
+    // Se chegou aqui, todos falharam nesta tentativa
+    // Se foi rate limit, espera e tenta de novo
+    if (attempts < maxAttempts && lastError?.message?.includes('RATE_LIMIT')) {
+      console.warn(`[RETRY] Rate limit atingido, aguardando 2s e tentando novamente...`);
+      await new Promise((r) => setTimeout(r, 2000));
+    } else {
+      break; // Não vale a pena retentar se não foi rate limit
     }
   }
 
