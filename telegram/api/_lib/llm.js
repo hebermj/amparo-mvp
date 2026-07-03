@@ -129,13 +129,11 @@ async function processWithLLM(userMessage, session, chatId) {
       `Olá! 😊\n\n` +
       `Para eu funcionar, preciso de uma chave de IA configurada.\n\n` +
       `Peça ao desenvolvedor para definir uma destas variáveis no Vercel:\n` +
-      `• \`DEEPSEEK_API_KEY\` (recomendado — mais barato)\n` +
-      `• \`CLAUDE_API_KEY\`\n` +
-      `• \`OPENAI_API_KEY\`\n\n` +
-      `Enquanto isso, aqui vai uma ajuda:\n` +
-      `*Você perguntou:* "${userMessage.substring(0, 100)}"\n\n` +
-      `💡 *Dica:* No [Buscapé](https://www.buscape.com.br) ou [Mercado Livre](https://www.mercadolivre.com.br) ` +
-      `você pode encontrar ótimas ofertas!`
+      `- DEEPSEEK_API_KEY (recomendado)\n` +
+      `- CLAUDE_API_KEY\n` +
+      `- OPENAI_API_KEY\n\n` +
+      `Enquanto isso, uma dica:\n` +
+      `"${userMessage.substring(0, 100)}" voce pode encontrar no Buscape (buscape.com.br) ou Mercado Livre (mercadolivre.com.br).`
     );
   }
 

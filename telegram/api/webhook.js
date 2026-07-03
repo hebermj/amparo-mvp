@@ -107,8 +107,8 @@ module.exports = async (req, res) => {
     // Processa com a LLM
     const reply = await processWithLLM(text, session, chatId);
 
-    // Envia resposta
-    await sendMessage(chatId, reply, { parse_mode: 'Markdown' });
+    // Envia resposta em texto puro (sem Markdown para evitar erros de parse)
+    await sendMessage(chatId, reply);
 
     return res.status(200).json({ status: 'ok' });
 
