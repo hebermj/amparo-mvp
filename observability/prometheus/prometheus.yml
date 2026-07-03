@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "gateway"
+    static_configs:
+      - targets: ["gateway:3000"]
+        labels:
+          service: "gateway"
+
+  - job_name: "worker-stt"
+    static_configs:
+      - targets: ["worker-stt:9091"]
+        labels:
+          service: "worker-stt"
+
+  - job_name: "worker-orchestrator"
+    static_configs:
+      - targets: ["worker-orchestrator:9092"]
+        labels:
+          service: "worker-orchestrator"
+
+  - job_name: "worker-search"
+    static_configs:
+      - targets: ["worker-search:9093"]
+        labels:
+          service: "worker-search"
+
+  - job_name: "worker-sender"
+    static_configs:
+      - targets: ["worker-sender:9094"]
+        labels:
+          service: "worker-sender"

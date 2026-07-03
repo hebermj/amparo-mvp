@@ -1,0 +1,290 @@
+# ====================================================================
+# Amparo MVP v2 — Docker Compose
+# Orquestra todos os serviços do pipeline assíncrono
+# ====================================================================
+
+version: "3.9"
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: amparo-postgres
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-amparo_mvp}
+      POSTGRES_USER: ${DATABASE_USER:-amparo}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-amparo123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amparo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Redis ───────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: amparo-redis
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── RabbitMQ ────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: amparo-rabbitmq
+    ports:
+      - "5672:5672"       # AMQP
+      - "15672:15672"     # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── SearXNG ─────────────────────────────────────────────────────
+  searxng:
+    image: searxng/searxng:latest
+    container_name: amparo-searxng
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng-data:/etc/searxng
+    environment:
+      SEARXNG_BASE_URL: https://${SEARXNG_HOSTNAME:-localhost}/
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── API Gateway ─────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: amparo-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Worker: STT ─────────────────────────────────────────────────
+  worker-stt:
+    build:
+      context: ./worker-stt
+      dockerfile: Dockerfile
+    container_name: amparo-worker-stt
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN}
+      WHATSAPP_API_URL: ${WHATSAPP_API_URL}
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION}
+      STT_PROVIDER: ${STT_PROVIDER:-whisper}
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      GOOGLE_STT_API_KEY: ${GOOGLE_STT_API_KEY:-}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Worker: Orquestrador ────────────────────────────────────────
+  worker-orchestrator:
+    build:
+      context: ./worker-orchestrator
+      dockerfile: Dockerfile
+    container_name: amparo-orchestrator
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      DATABASE_URL: postgresql://${DATABASE_USER:-amparo}:${DATABASE_PASSWORD:-amparo123}@postgres:5432/${DATABASE_NAME:-amparo_mvp}
+      REDIS_URL: redis://redis:6379
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LLM_PRIMARY_PROVIDER: ${LLM_PRIMARY_PROVIDER:-deepseek}
+      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-claude}
+      LLM_CACHE_TTL_SECONDS: ${LLM_CACHE_TTL_SECONDS:-3600}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Worker: SearXNG Query ──────────────────────────────────────
+  worker-search:
+    build:
+      context: ./worker-search
+      dockerfile: Dockerfile
+    container_name: amparo-worker-search
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      SEARXNG_URL: http://searxng:8080
+      SEARXNG_TIMEOUT_MS: ${SEARXNG_TIMEOUT_MS:-5000}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      searxng:
+        condition: service_started
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Worker: WhatsApp Sender ─────────────────────────────────────
+  worker-sender:
+    build:
+      context: ./worker-sender
+      dockerfile: Dockerfile
+    container_name: amparo-worker-sender
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID}
+      WHATSAPP_API_URL: ${WHATSAPP_API_URL}
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Prometheus ─────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: amparo-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Loki ────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: amparo-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yml
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Tempo ───────────────────────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: amparo-tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./observability/tempo/tempo-config.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/tmp/tempo
+    command:
+      - -config.file=/etc/tempo/tempo.yml
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+  # ── Grafana ─────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: amparo-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: amparo123
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - ./observability/grafana/datasources/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./observability/grafana/dashboards/amparo.json:/etc/grafana/provisioning/dashboards/amparo.json:ro
+      - grafana-data:/var/lib/grafana
+    logging: *default-logging
+    networks:
+      - amparo-net
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+  searxng-data:
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
+
+networks:
+  amparo-net:
+    driver: bridge

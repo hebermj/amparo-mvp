@@ -1,0 +1,104 @@
+[
+  {
+    "description": "Mensagem de texto simples",
+    "input": {
+      "object": "whatsapp_business_account",
+      "entry": [{
+        "id": "12345",
+        "changes": [{
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": { "display_phone_number": "5511987654321", "phone_number_id": "PHONE_ID" },
+            "contacts": [{ "profile": { "name": "Maria" }, "wa_id": "5511999999999" }],
+            "messages": [{
+              "from": "5511999999999",
+              "id": "wamid.ABC123",
+              "timestamp": "1719876543",
+              "type": "text",
+              "text": { "body": "Quero comprar uma geladeira" }
+            }]
+          }
+        }]
+      }]
+    },
+    "expected": {
+      "type": "text",
+      "from": "5511999999999",
+      "messageId": "wamid.ABC123",
+      "content": { "text": "Quero comprar uma geladeira" }
+    }
+  },
+  {
+    "description": "Mensagem de áudio",
+    "input": {
+      "object": "whatsapp_business_account",
+      "entry": [{
+        "id": "12345",
+        "changes": [{
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": { "display_phone_number": "5511987654321", "phone_number_id": "PHONE_ID" },
+            "contacts": [{ "profile": { "name": "João" }, "wa_id": "5511988888888" }],
+            "messages": [{
+              "from": "5511988888888",
+              "id": "wamid.DEF456",
+              "timestamp": "1719876600",
+              "type": "audio",
+              "audio": { "id": "media_id_audio_123", "mime_type": "audio/ogg" }
+            }]
+          }
+        }]
+      }]
+    },
+    "expected": {
+      "type": "audio",
+      "from": "5511988888888",
+      "messageId": "wamid.DEF456",
+      "content": { "audioId": "media_id_audio_123" }
+    }
+  },
+  {
+    "description": "Resposta de botão interativo",
+    "input": {
+      "object": "whatsapp_business_account",
+      "entry": [{
+        "id": "12345",
+        "changes": [{
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": { "display_phone_number": "5511987654321", "phone_number_id": "PHONE_ID" },
+            "contacts": [{ "profile": { "name": "Ana" }, "wa_id": "5511977777777" }],
+            "messages": [{
+              "from": "5511977777777",
+              "id": "wamid.GHI789",
+              "timestamp": "1719876666",
+              "type": "interactive",
+              "interactive": {
+                "type": "button_reply",
+                "button_reply": { "id": "confirmar_compra", "title": "Sim, confirmo" }
+              }
+            }]
+          }
+        }]
+      }]
+    },
+    "expected": {
+      "type": "interactive",
+      "from": "5511977777777",
+      "messageId": "wamid.GHI789",
+      "content": { "buttonId": "confirmar_compra", "buttonText": "Sim, confirmo" }
+    }
+  },
+  {
+    "description": "Requisição de verificação (GET)",
+    "input": {
+      "hub.mode": "subscribe",
+      "hub.challenge": "12345",
+      "hub.verify_token": "seu_verify_token_aqui"
+    },
+    "expected": {
+      "status": 200,
+      "body": "12345"
+    }
+  }
+]

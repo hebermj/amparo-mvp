@@ -1,0 +1,33 @@
+{
+  "rabbit_version": "4.0",
+  "rabbitmq_version": "4.0.0",
+  "users": [
+    {"name": "guest", "password_hash": null, "tags": "administrator"}
+  ],
+  "vhosts": [
+    {"name": "/"}
+  ],
+  "permissions": [
+    {"user": "guest", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*"}
+  ],
+  "queues": [
+    {"name": "transcricao",          "vhost": "/", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "dlx", "x-message-ttl": 1800000}},
+    {"name": "transcricao_dlq",      "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "processamento",        "vhost": "/", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "dlx", "x-message-ttl": 1800000}},
+    {"name": "processamento_dlq",    "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "busca_lojas",          "vhost": "/", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "dlx", "x-message-ttl": 1800000}},
+    {"name": "busca_lojas_dlq",      "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "envio",                "vhost": "/", "durable": true, "auto_delete": false, "arguments": {"x-dead-letter-exchange": "dlx", "x-message-ttl": 1800000}},
+    {"name": "envio_dlq",            "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}}
+  ],
+  "exchanges": [
+    {"name": "dlx", "vhost": "/", "type": "direct", "durable": true, "auto_delete": false, "internal": false, "arguments": {}},
+    {"name": "amparo", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}}
+  ],
+  "bindings": [
+    {"source": "dlx", "vhost": "/", "destination": "transcricao_dlq",     "destination_type": "queue", "routing_key": "transcricao", "arguments": {}},
+    {"source": "dlx", "vhost": "/", "destination": "processamento_dlq",   "destination_type": "queue", "routing_key": "processamento", "arguments": {}},
+    {"source": "dlx", "vhost": "/", "destination": "busca_lojas_dlq",     "destination_type": "queue", "routing_key": "busca_lojas", "arguments": {}},
+    {"source": "dlx", "vhost": "/", "destination": "envio_dlq",           "destination_type": "queue", "routing_key": "envio", "arguments": {}}
+  ]
+}
